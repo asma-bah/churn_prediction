@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import pandas as pd
+from typing import List
+
 
 """#on crée une application
 app = FastAPI(title="API de prédiction du churn")
@@ -69,5 +71,31 @@ def predire(client: Client):
     #renvoyer un resultat lisible
     return {
         "prediction": "Risque de départ " if prediction == 1 else "Va probablement rester",
-        "probabilité depart" :  round(float(probabilite), 2)
+        "probabilite_depart" :  round(float(probabilite), 2)
     }
+
+
+#predire plusieurs client en meme temps
+@app.post("/predire_batch")
+def predire_plusieurs(clients: List[Client]):
+    #mettre les données dans un tableau
+    donnees = pd.DataFrame([client.model_dump() for client in clients])
+
+    #alignement sur 30 colonnes 
+    donnees = pd.get_dummies(donnees)
+    donnees = donnees.reindex(columns=model_columns, fill_value=0)
+
+    #predictions pour tous les clients d'un seul coup
+    predictions = pipeline.predict(donnees)
+    probabilitees = pipeline.predict_proba(donnees)[:,1]
+
+    #construire la liste des resultats
+    resultats = []
+    for i in range(len(clients)):
+        resultats.append({
+            "client": i + 1,
+            "prediction": "Risque de départ" if predictions[i] == 1 else "Va probablement rester",
+            "probabilite_depart": round(float(probabilitees[i]), 2)
+        })
+
+    return resultats
